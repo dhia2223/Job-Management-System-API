@@ -14,6 +14,7 @@ public class JobResponse {
     private String location;
     private Double salary;
     private JobType jobType;
+    private String createdBy; // Creator's email
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

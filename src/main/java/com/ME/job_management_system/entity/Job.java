@@ -3,11 +3,15 @@ package com.ME.job_management_system.entity;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "jobs")
+@Data
+@NoArgsConstructor
 public class Job {
 
     @Id
@@ -56,8 +60,7 @@ public class Job {
     @JoinColumn(name = "created_by")
     private User createdBy;
 
-    // Default constructor (required by JPA)
-    public Job() {}
+
 
     // Constructor for creating new jobs
     // Update your constructor
@@ -84,34 +87,6 @@ public class Job {
         updatedAt = LocalDateTime.now();
     }
 
-    // Getters and Setters
-    // (We'll use Lombok later to auto-generate these)
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-
-    public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
-
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
-
-    public String getCompany() { return company; }
-    public void setCompany(String company) { this.company = company; }
-
-    public String getLocation() { return location; }
-    public void setLocation(String location) { this.location = location; }
-
-    public Double getSalary() { return salary; }
-    public void setSalary(Double salary) { this.salary = salary; }
-
-    public JobType getJobType() { return jobType; }
-    public void setJobType(JobType jobType) { this.jobType = jobType; }
-
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }
 
 

@@ -5,14 +5,20 @@ import com.ME.job_management_system.dto.JobResponse;
 import com.ME.job_management_system.dto.JobUpdateRequest;
 import com.ME.job_management_system.entity.Job;
 import com.ME.job_management_system.entity.JobType;
+import com.ME.job_management_system.entity.User;
+import com.ME.job_management_system.entity.UserRole;
 import com.ME.job_management_system.exception.ResourceNotFoundException;
 import com.ME.job_management_system.repository.JobRepository;
+import com.ME.job_management_system.util.SecurityUtil;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class JobService {
 
     private final JobRepository jobRepository;
@@ -33,22 +39,25 @@ public class JobService {
         response.setJobType(job.getJobType());
         response.setCreatedAt(job.getCreatedAt());
         response.setUpdatedAt(job.getUpdatedAt());
+        response.setCreatedBy(job.getCreatedBy().getEmail()); // Include creator info
         return response;
     }
 
     // Convert Create Request DTO to Entity
     private Job convertToEntity(JobCreateRequest request) {
-        Job job = new Job();
-        job.setTitle(request.getTitle());
-        job.setDescription(request.getDescription());
-        job.setCompany(request.getCompany());
-        job.setLocation(request.getLocation());
-        job.setSalary(request.getSalary());
-        job.setJobType(request.getJobType());
-        return job;
+        User currentUser = SecurityUtil.getCurrentUser();
+        return new Job(
+                request.getTitle(),
+                request.getDescription(),
+                request.getCompany(),
+                request.getLocation(),
+                request.getSalary(),
+                request.getJobType(),
+                currentUser
+        );
     }
 
-    // Get all jobs
+    // Get all jobs - accessible to all authenticated users
     public List<JobResponse> getAllJobs() {
         return jobRepository.findAll()
                 .stream()
@@ -56,26 +65,34 @@ public class JobService {
                 .collect(Collectors.toList());
     }
 
-    // Get job by ID
+    // Get job by ID - accessible to all authenticated users
     public JobResponse getJobById(Long id) {
         Job job = jobRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Job", "id", id));
         return convertToResponse(job);
     }
 
-    // Create new job
+    // Create new job - only employers and admins can create jobs
+    @PreAuthorize("hasRole('EMPLOYER') or hasRole('ADMIN')")
     public JobResponse createJob(JobCreateRequest jobRequest) {
         Job job = convertToEntity(jobRequest);
         Job savedJob = jobRepository.save(job);
         return convertToResponse(savedJob);
     }
 
-    // Update existing job with partial updates
+    // Update existing job - only job creator or admin can update
     public JobResponse updateJob(Long id, JobUpdateRequest jobRequest) {
         Job existingJob = jobRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Job", "id", id));
 
-        // Update only the provided fields (partial update)
+        // Check if current user is the creator or admin
+        User currentUser = SecurityUtil.getCurrentUser();
+        if (!existingJob.getCreatedBy().getId().equals(currentUser.getId()) &&
+                !currentUser.getRole().equals(UserRole.ADMIN)) { // Enhanced admin check
+            throw new RuntimeException("You can only update your own jobs");
+        }
+
+        // Update only the provided fields
         if (jobRequest.getTitle() != null) {
             existingJob.setTitle(jobRequest.getTitle());
         }
@@ -99,14 +116,46 @@ public class JobService {
         return convertToResponse(updatedJob);
     }
 
-    // Delete job
+    // Delete job - only job creator or admin can delete
     public void deleteJob(Long id) {
         Job job = jobRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Job", "id", id));
+
+        // Check if current user is the creator or admin
+        User currentUser = SecurityUtil.getCurrentUser();
+        if (!job.getCreatedBy().getId().equals(currentUser.getId()) &&
+                !currentUser.getRole().equals(UserRole.ADMIN)) { // Enhanced admin check
+            throw new RuntimeException("You can only delete your own jobs");
+        }
+
         jobRepository.delete(job);
     }
 
-    // Search jobs by company
+    @PreAuthorize("hasRole('ADMIN')")
+    public JobResponse getAnyJob(Long id) {
+        Job job = jobRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Job", "id", id));
+        return convertToResponse(job);
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    public void deleteAnyJob(Long id) {
+        if (!jobRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Job", "id", id);
+        }
+        jobRepository.deleteById(id);
+    }
+
+    // Get jobs created by current user
+    public List<JobResponse> getMyJobs() {
+        User currentUser = SecurityUtil.getCurrentUser();
+        return jobRepository.findByCreatedBy(currentUser)
+                .stream()
+                .map(this::convertToResponse)
+                .collect(Collectors.toList());
+    }
+
+    // Search jobs by company - accessible to all
     public List<JobResponse> getJobsByCompany(String company) {
         List<Job> jobs = jobRepository.findByCompany(company);
         if (jobs.isEmpty()) {
@@ -117,7 +166,7 @@ public class JobService {
                 .collect(Collectors.toList());
     }
 
-    // Search jobs by location
+    // Search jobs by location - accessible to all
     public List<JobResponse> getJobsByLocation(String location) {
         return jobRepository.findByLocationContainingIgnoreCase(location)
                 .stream()
@@ -125,7 +174,7 @@ public class JobService {
                 .collect(Collectors.toList());
     }
 
-    // Search by title
+    // Search by title - accessible to all
     public List<JobResponse> getJobsByTitle(String title) {
         return jobRepository.findByTitleContainingIgnoreCase(title)
                 .stream()
@@ -133,7 +182,7 @@ public class JobService {
                 .collect(Collectors.toList());
     }
 
-    // Search by job type
+    // Search by job type - accessible to all
     public List<JobResponse> getJobsByJobType(JobType jobType) {
         List<Job> jobs = jobRepository.findByJobType(jobType);
         if (jobs.isEmpty()) {
@@ -157,5 +206,11 @@ public class JobService {
     // Get jobs count by job type
     public long getJobsCountByJobType(JobType jobType) {
         return jobRepository.countByJobType(jobType);
+    }
+
+    // Get current user's jobs count
+    public long getMyJobsCount() {
+        User currentUser = SecurityUtil.getCurrentUser();
+        return jobRepository.countByCreatedBy(currentUser);
     }
 }
